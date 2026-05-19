@@ -9,10 +9,10 @@ class Group(models.Model):
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='created_groups'
+        related_name='created_groups',
     )
-    created_at  = models.DateTimeField(auto_now_add=True)
-    updated_at  = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'groups_group'
@@ -30,18 +30,18 @@ class GroupMembership(models.Model):
     user      = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='memberships'
+        related_name='memberships',
     )
     group     = models.ForeignKey(
         Group,
         on_delete=models.CASCADE,
-        related_name='memberships'
+        related_name='memberships',
     )
     role      = models.CharField(max_length=10, choices=ROLE_CHOICES, default='member')
     joined_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        db_table = 'groups_membership'
+        db_table       = 'groups_membership'
         unique_together = ('user', 'group')
 
     def __str__(self):

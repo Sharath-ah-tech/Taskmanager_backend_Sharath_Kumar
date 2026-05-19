@@ -8,3 +8,4 @@ class NotificationAdmin(admin.ModelAdmin):
     list_filter   = ('type', 'is_read')
     list_editable = ('is_read',)
     search_fields = ('user__email',)
+    readonly_fields = ('created_at',)

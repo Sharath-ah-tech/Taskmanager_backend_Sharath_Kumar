@@ -3,13 +3,13 @@ from groups.models import GroupMembership
 
 
 class IsAdminUser(BasePermission):
-    """Only users with is_admin=True can access."""
+    """Only users with is_admin=True."""
     def has_permission(self, request, view):
         return bool(request.user and request.user.is_authenticated and request.user.is_admin)
 
 
 class CanAddTask(BasePermission):
-    """User must be active AND have can_add_task=True (set by admin)."""
+    """User must be active AND have can_add_task=True (toggled by admin)."""
     message = 'You do not have permission to create tasks. Contact an admin.'
 
     def has_permission(self, request, view):
@@ -32,10 +32,9 @@ class IsGroupMember(BasePermission):
             request.query_params.get('group')
         )
         if not group_id:
-            return True  # let view-level logic handle it
+            return True
         return GroupMembership.objects.filter(
-            user=request.user,
-            group_id=group_id
+            user=request.user, group_id=group_id
         ).exists()
 
 
@@ -46,19 +45,15 @@ class IsGroupAdminOrOwner(BasePermission):
         if not group_id:
             return False
         return GroupMembership.objects.filter(
-            user=request.user,
-            group_id=group_id,
-            role__in=['owner', 'admin']
+            user=request.user, group_id=group_id, role__in=['owner', 'admin']
         ).exists()
 
 
 class IsTaskOwnerOrGroupAdmin(BasePermission):
-    """For task-level actions — only the task creator or group admin can edit/delete."""
+    """Task creator or group admin/owner can edit/delete."""
     def has_object_permission(self, request, view, obj):
         if request.user == obj.created_by:
             return True
         return GroupMembership.objects.filter(
-            user=request.user,
-            group=obj.group,
-            role__in=['owner', 'admin']
+            user=request.user, group=obj.group, role__in=['owner', 'admin']
         ).exists()

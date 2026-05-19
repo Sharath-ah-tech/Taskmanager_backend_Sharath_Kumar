@@ -3,9 +3,9 @@ from .models import Group, GroupMembership
 
 
 class MembershipInline(admin.TabularInline):
-    model  = GroupMembership
-    extra  = 0
-    fields = ('user', 'role', 'joined_at')
+    model         = GroupMembership
+    extra         = 0
+    fields        = ('user', 'role', 'joined_at')
     readonly_fields = ('joined_at',)
 
 
@@ -13,6 +13,7 @@ class MembershipInline(admin.TabularInline):
 class GroupAdmin(admin.ModelAdmin):
     list_display  = ('name', 'created_by', 'created_at')
     search_fields = ('name',)
+    readonly_fields = ('created_at', 'updated_at')
     inlines       = [MembershipInline]
 
 
