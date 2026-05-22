@@ -3,14 +3,14 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import tokenManager from '../../utils/tokenManager';
 
+const INACTIVITY_WARNING_TIME = 6 * 24 * 60 * 60 * 1000; // 6 days (warning 1 day before)
+const INACTIVITY_LIMIT = 7 * 24 * 60 * 60 * 1000; // 7 days
+
 const InactivityWarning = () => {
   const [showWarning, setShowWarning] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const { logout } = useAuth();
   const navigate = useNavigate();
-  
-  const INACTIVITY_WARNING_TIME = 6 * 24 * 60 * 60 * 1000; // 6 days (warning 1 day before)
-  const INACTIVITY_LIMIT = 7 * 24 * 60 * 60 * 1000; // 7 days
   
   useEffect(() => {
     const checkInactivity = () => {

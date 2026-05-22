@@ -9,3 +9,4 @@ export const changePassword = (data) => api.post('/auth/me/password/', data);
 export const requestPasswordReset = (email) => api.post('/auth/password-reset/', { email });
 export const resetPassword = (uid, token, newPassword) => 
   api.post(`/auth/password-reset/confirm/${uid}/${token}/`, { new_password: newPassword });
+export const oauthCallback = () => api.get('/auth/oauth/callback/', { withCredentials: true });

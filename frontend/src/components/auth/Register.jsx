@@ -34,8 +34,9 @@ const Register = () => {
         password2: formData.passwordConfirm
       };
       
-      await register(submitData);
-      navigate('/');
+      const response = await register(submitData);
+      const registeredUser = response.data.user;
+      navigate(registeredUser?.is_superuser ? '/admin' : '/');
     } catch (err) {
       setError(
         err.response?.data?.error || 
@@ -49,7 +50,9 @@ const Register = () => {
 
   const handleGoogleRegister = () => {
     // Redirect to Django allauth Google endpoint
-    window.location.href = 'http://127.0.0.1:8000/accounts/google/login/';
+    const apiRoot = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') || 'http://127.0.0.1:8000';
+    const callbackUrl = `${window.location.origin}/oauth-callback`;
+    window.location.href = `${apiRoot}/accounts/google/login/?next=${encodeURIComponent(callbackUrl)}`;
   };
 
   return (

@@ -6,6 +6,7 @@ import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import PasswordReset from './components/auth/PasswordReset';
 import PasswordResetConfirm from './components/auth/PasswordResetConfirm';
+import OAuthCallback from './components/auth/OAuthCallback';
 import Dashboard from './components/Dashboard';
 import GroupList from './components/groups/GroupList';
 import GroupDetail from './components/groups/GroupDetail';
@@ -43,6 +44,7 @@ const AppContent = () => {
           <Route path="/register" element={<Register />} />
           <Route path="/password-reset" element={<PasswordReset />} />
           <Route path="/password-reset-confirm/:uidb64/:token" element={<PasswordResetConfirm />} />
+          <Route path="/oauth-callback" element={<OAuthCallback />} />
           
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/groups" element={<ProtectedRoute><GroupList /></ProtectedRoute>} />

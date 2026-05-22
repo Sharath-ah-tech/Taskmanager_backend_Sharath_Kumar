@@ -23,7 +23,7 @@ class TokenManager {
     // Actually we can't set HttpOnly from JS, so we use secure localStorage + session tracking
     Cookies.set(this.accessTokenKey, accessToken, { 
       expires: 7, // days
-      secure: process.env.NODE_ENV === 'production',
+      secure: import.meta.env.PROD,
       sameSite: 'Strict'
     });
     

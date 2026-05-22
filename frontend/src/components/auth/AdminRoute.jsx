@@ -8,8 +8,8 @@ const AdminRoute = ({ children }) => {
     return <div className="text-center mt-8"><div className="loader mx-auto"></div></div>;
   }
 
-  // Check if user exists and is an admin
-  if (!user || !user.is_admin) {
+  // Only Django superusers can open the platform admin page.
+  if (!user || !user.is_superuser) {
     return <Navigate to="/" replace />;
   }
 

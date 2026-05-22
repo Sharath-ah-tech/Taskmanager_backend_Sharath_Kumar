@@ -1,8 +1,20 @@
-from django.db.models.signals import post_save
+from django.db.models.signals import pre_save, post_save
 from django.dispatch import receiver
 from tasks.models import Task, TaskComment
 from groups.models import GroupMembership
 from .models import Notification
+
+
+@receiver(pre_save, sender=Task)
+def remember_previous_task_status(sender, instance, **kwargs):
+    if not instance.pk:
+        instance._previous_status = None
+        return
+    instance._previous_status = (
+        Task.objects.filter(pk=instance.pk)
+        .values_list('status', flat=True)
+        .first()
+    )
 
 
 @receiver(post_save, sender=Task)
@@ -44,7 +56,7 @@ def notify_on_task_save(sender, instance, created, **kwargs):
         )
 
     # Separate completed notification
-    if not created and task.status == 'done':
+    if not created and task.status == 'completed' and getattr(task, '_previous_status', None) != 'completed':
         members = GroupMembership.objects.filter(
             group=task.group
         ).exclude(user=task.created_by).select_related('user')

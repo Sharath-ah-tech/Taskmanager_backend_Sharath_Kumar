@@ -15,6 +15,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
 
     'rest_framework',
     'rest_framework_simplejwt',
@@ -30,7 +31,7 @@ INSTALLED_APPS = [
     'users',
     'groups',
     'tasks',
-    'notifications',
+    'notifications.apps.NotificationsConfig',
 ]
 
 MIDDLEWARE = [
@@ -64,6 +65,8 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'core.wsgi.application'
 
+SITE_ID = 1
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
@@ -95,6 +98,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
@@ -118,7 +122,13 @@ SIMPLE_JWT = {
 }
 
 # ── CORS ───────────────────────────────────────────────────────────────────────
-CORS_ALLOW_ALL_ORIGINS = True   # tighten this in production
+CORS_ALLOWED_ORIGINS = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+]
+CORS_ALLOW_CREDENTIALS = True
 
 # ── django-allauth ─────────────────────────────────────────────────────────────
 AUTHENTICATION_BACKENDS = [
@@ -132,6 +142,9 @@ SOCIALACCOUNT_EMAIL_VERIFICATION = 'none'
 ACCOUNT_EMAIL_VERIFICATION       = 'none'
 ACCOUNT_LOGIN_METHODS            = {'email'}
 ACCOUNT_SIGNUP_FIELDS            = ['email*', 'password1*', 'password2*']
+SOCIALACCOUNT_LOGIN_ON_GET       = True
+FRONTEND_URL                     = config('FRONTEND_URL', default='http://127.0.0.1:3000')
+LOGIN_REDIRECT_URL               = f'{FRONTEND_URL}/oauth-callback'
 
 SOCIALACCOUNT_PROVIDERS = {
     'google': {

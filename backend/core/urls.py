@@ -2,8 +2,11 @@ from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
+from .views import api_home
 
 urlpatterns = [
+    path('',                       api_home, name='api-home'),
+    path('api/',                   api_home, name='api-root'),
     path('admin/',                  admin.site.urls),
     path('accounts/',               include('allauth.urls')),
     path('api/auth/',               include('users.urls')),

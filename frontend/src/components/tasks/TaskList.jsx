@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getTasks, deleteTask } from '../../services/tasks';
 import { useAuth } from '../../contexts/AuthContext';
@@ -8,11 +8,9 @@ const TaskList = () => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchTasks();
-  }, []);
+  const isAdmin = Boolean(user?.is_superuser);
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     try {
       const response = await getTasks();
       setTasks(response.data.results || response.data);
@@ -21,32 +19,20 @@ const TaskList = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchTasks();
+  }, [fetchTasks]);
 
   const handleDelete = async (id) => {
-    if (window.confirm('Delete this task?')) {
-      try {
-        await deleteTask(id);
-        fetchTasks();
-      } catch (error) {
-        console.error('Failed to delete task:', error);
-      }
-    }
-  };
-
-  const getPriorityStyle = (priority) => {
-    switch (priority) {
-      case 'red_light': return { color: '#dc2626', bg: 'rgba(239, 68, 68, 0.1)', text: '🔴 Red Light', border: '#dc2626' };
-      case 'yellow_light': return { color: '#d97706', bg: 'rgba(245, 158, 11, 0.1)', text: '🟡 Yellow Light', border: '#d97706' };
-      default: return { color: '#16a34a', bg: 'rgba(34, 197, 94, 0.1)', text: '🟢 Green Light', border: '#16a34a' };
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
+    if (!window.confirm('Delete this task?')) return;
+    try {
+      await deleteTask(id);
+      fetchTasks();
+    } catch (error) {
+      console.error('Failed to delete task:', error);
     }
   };
 
@@ -57,33 +43,32 @@ const TaskList = () => {
       <div className="flex justify-between items-center mb-8">
         <div>
           <h1 className="text-4xl font-bold mb-1">My Tasks</h1>
-          <p className="text-muted">Manage your assigned tasks and priorities.</p>
+          <p className="text-muted">Red means pending. Green means completed.</p>
         </div>
         <Link to="/tasks/new" className="btn btn-primary">
-          + New Task
+          New Task
         </Link>
       </div>
-      
+
       {tasks.length === 0 ? (
         <div className="glass-card text-center py-12">
           <h3 className="text-2xl font-semibold mb-2">No tasks found</h3>
-          <p className="text-muted mb-6">You don't have any tasks assigned yet. Get started by creating one!</p>
+          <p className="text-muted mb-6">You don't have any tasks assigned yet. Get started by creating one.</p>
           <Link to="/tasks/new" className="btn btn-outline">Create First Task</Link>
         </div>
       ) : (
-        <div className="grid-cards mb-8" style={{gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))'}}>
+        <div className="grid-cards mb-8" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))' }}>
           {tasks.map((task) => {
-            const priorityInfo = getPriorityStyle(task.priority);
-            
-            const isExpired = task.due_date && new Date(task.due_date) < new Date(new Date().setHours(0,0,0,0));
+            const isExpired = task.due_date && new Date(task.due_date) < new Date(new Date().setHours(0, 0, 0, 0));
             const isTaskDisabled = task.is_enabled === false || isExpired;
-            
+            const statusClass = task.status === 'completed' ? 'completed' : 'pending';
+
             return (
-              <div 
-                key={task.id} 
+              <div
+                key={task.id}
                 className="glass-card flex flex-col justify-between"
                 style={{
-                  borderTop: `4px solid ${priorityInfo.border}`,
+                  borderTop: `4px solid ${task.status === 'completed' ? 'var(--success)' : 'var(--danger)'}`,
                   opacity: isTaskDisabled ? 0.6 : 1,
                   filter: isTaskDisabled ? 'grayscale(0.8)' : 'none',
                   position: 'relative'
@@ -94,31 +79,20 @@ const TaskList = () => {
                     {isExpired ? 'EXPIRED' : 'DISABLED'}
                   </div>
                 )}
-                
+
                 <div>
-                  <div className="flex justify-between items-start mb-3">
-                    <Link to={`/tasks/${task.id}`} className="text-xl font-bold hover:underline" style={{textDecoration: 'none'}}>
+                  <div className="flex justify-between items-start mb-3 gap-4">
+                    <Link to={`/tasks/${task.id}`} className="text-xl font-bold hover:underline" style={{ textDecoration: 'none' }}>
                       {task.title}
                     </Link>
+                    <span className={`status-light ${statusClass}`} title={task.status} aria-label={task.status}></span>
                   </div>
-                  
-                  <p className="text-muted text-sm mb-4" style={{display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden'}}>
+
+                  <p className="text-muted text-sm mb-4" style={{ display: '-webkit-box', WebkitLineClamp: '2', WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {task.description || 'No description provided.'}
                   </p>
-                  
-                  <div className="flex flex-wrap gap-2 mb-4">
-                    <span 
-                      className="text-xs font-bold px-2 py-1 rounded-md" 
-                      style={{background: priorityInfo.bg, color: priorityInfo.color}}
-                    >
-                      {priorityInfo.text}
-                    </span>
-                    <span className={`text-xs font-bold px-2 py-1 rounded-md ${getStatusColor(task.status)}`}>
-                      {task.status.toUpperCase()}
-                    </span>
-                  </div>
                 </div>
-                
+
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
                   <div className="text-xs text-muted flex items-center gap-2">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -129,13 +103,13 @@ const TaskList = () => {
                     </svg>
                     {task.due_date ? new Date(task.due_date).toLocaleDateString() : 'No Due Date'}
                   </div>
-                  
+
                   <div className="flex gap-2">
-                    <Link to={`/tasks/${task.id}/edit`} className="text-sm font-semibold hover:underline" style={{color: 'var(--accent-primary)'}}>
-                      Edit
+                    <Link to={`/tasks/${task.id}/edit`} className="btn btn-outline btn-sm">
+                      {isAdmin ? 'Edit' : 'Status'}
                     </Link>
-                    {(task.created_by === (user?.username || user?.email) || user?.is_admin) && (
-                      <button onClick={() => handleDelete(task.id)} className="text-sm font-semibold hover:underline text-red-600">
+                    {isAdmin && (
+                      <button onClick={() => handleDelete(task.id)} className="btn btn-danger btn-sm">
                         Delete
                       </button>
                     )}

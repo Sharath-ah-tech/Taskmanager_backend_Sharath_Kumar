@@ -26,6 +26,7 @@ const GroupForm = () => {
             description: res.data.description || ''
           });
         } catch (err) {
+          console.error('Failed to load group data:', err);
           setError('Failed to load group data.');
         } finally {
           setInitialLoading(false);

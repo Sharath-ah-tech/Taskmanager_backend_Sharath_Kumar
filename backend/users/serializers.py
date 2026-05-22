@@ -28,9 +28,9 @@ class UserSerializer(serializers.ModelSerializer):
         model  = User
         fields = (
             'id', 'email', 'username', 'avatar_url',
-            'is_admin', 'can_add_task', 'oauth_provider', 'date_joined',
+            'is_admin', 'is_superuser', 'can_add_task', 'oauth_provider', 'date_joined',
         )
-        read_only_fields = ('id', 'email', 'is_admin', 'can_add_task', 'oauth_provider', 'date_joined')
+        read_only_fields = ('id', 'email', 'is_admin', 'is_superuser', 'can_add_task', 'oauth_provider', 'date_joined')
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):

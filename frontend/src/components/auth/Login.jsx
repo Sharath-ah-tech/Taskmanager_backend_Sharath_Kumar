@@ -13,6 +13,7 @@ const Login = () => {
 
   useEffect(() => {
     if (location.state?.message) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setMessage(location.state.message);
       window.history.replaceState({}, document.title);
     }
@@ -25,8 +26,9 @@ const Login = () => {
     setLoading(true);
     
     try {
-      await login(formData);
-      navigate('/');
+      const response = await login(formData);
+      const loggedInUser = response.data.user;
+      navigate(loggedInUser?.is_superuser ? '/admin' : '/');
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
     } finally {
@@ -36,7 +38,9 @@ const Login = () => {
 
   const handleGoogleLogin = () => {
     // Redirect to Django allauth Google endpoint
-    window.location.href = 'http://127.0.0.1:8000/accounts/google/login/';
+    const apiRoot = import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, '') || 'http://127.0.0.1:8000';
+    const callbackUrl = `${window.location.origin}/oauth-callback`;
+    window.location.href = `${apiRoot}/accounts/google/login/?next=${encodeURIComponent(callbackUrl)}`;
   };
 
   return (

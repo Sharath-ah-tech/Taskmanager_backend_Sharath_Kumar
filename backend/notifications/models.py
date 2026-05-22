@@ -10,6 +10,7 @@ class Notification(models.Model):
         ('task_updated',   'Task you created was updated'),
         ('comment_added',  'Comment added to your task'),
         ('task_completed', 'Task marked as done'),
+        ('member_invited', 'Member added to group'),
     ]
 
     user       = models.ForeignKey(

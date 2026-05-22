@@ -1,5 +1,5 @@
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getTaskDetail, updateTask, deleteTask, addComment, deleteComment, uploadAttachment, deleteAttachment } from '../../services/tasks';
 import { getGroups } from '../../services/groups';
 import { useAuth } from '../../contexts/AuthContext';
@@ -15,13 +15,9 @@ const TaskDetail = () => {
   const [newComment, setNewComment] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(true);
+  const isAdmin = Boolean(user?.is_superuser);
 
-  useEffect(() => {
-    fetchTask();
-    fetchGroups();
-  }, [id]);
-
-  const fetchTask = async () => {
+  const fetchTask = useCallback(async () => {
     try {
       const res = await getTaskDetail(id);
       setTask(res.data);
@@ -34,21 +30,27 @@ const TaskDetail = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  const fetchGroups = async () => {
+  const fetchGroups = useCallback(async () => {
     try {
       const res = await getGroups();
       setGroups(res.data.results || res.data);
     } catch (error) {
       console.error('Failed to fetch groups:', error);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchTask();
+    fetchGroups();
+  }, [fetchTask, fetchGroups]);
 
   const handleUpdate = async (e) => {
     e.preventDefault();
     try {
-      const dataToSubmit = { ...formData };
+      const dataToSubmit = isAdmin ? { ...formData } : { status: formData.status };
       if (!dataToSubmit.due_date) delete dataToSubmit.due_date;
       if (typeof dataToSubmit.due_date === 'string' && dataToSubmit.due_date.length > 16) {
         dataToSubmit.due_date = dataToSubmit.due_date.substring(0, 16);
@@ -100,42 +102,27 @@ const TaskDetail = () => {
     fetchTask();
   };
 
-  const getPriorityStyle = (priority) => {
-    switch (priority) {
-      case 'red_light': return { color: '#dc2626', bg: 'rgba(239, 68, 68, 0.1)', text: '🔴 Red Light' };
-      case 'yellow_light': return { color: '#d97706', bg: 'rgba(245, 158, 11, 0.1)', text: '🟡 Yellow Light' };
-      default: return { color: '#16a34a', bg: 'rgba(34, 197, 94, 0.1)', text: '🟢 Green Light' };
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
-  };
-
   if (loading) return <div className="text-center mt-8"><div className="loader mx-auto"></div></div>;
   if (!task) return <div className="text-center mt-8 text-red-600 font-bold text-xl">Task not found</div>;
 
   const isExpired = task.due_date && new Date(task.due_date) < new Date(new Date().setHours(0,0,0,0));
   const isTaskDisabled = task.is_enabled === false || isExpired;
-  const priorityInfo = getPriorityStyle(task.priority);
+  const statusClass = task.status === 'completed' ? 'completed' : 'pending';
 
   return (
     <div className="animate-fade-in" style={{maxWidth: '1000px', margin: '0 auto'}}>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold flex items-center gap-3">
+          <span className={`status-light ${statusClass}`} title={task.status} aria-label={task.status}></span>
           {task.title}
           {isTaskDisabled && <span className="text-xs font-bold bg-red-100 text-red-800 px-2 py-1 rounded">{isExpired ? 'EXPIRED' : 'DISABLED'}</span>}
         </h1>
         <div className="flex gap-2">
           <Link to="/tasks" className="btn btn-outline">Back</Link>
-          {!editMode && (task.created_by === (user?.username || user?.email) || user?.is_admin) && (
+          {!editMode && (task.created_by === (user?.username || user?.email) || isAdmin) && (
             <button onClick={() => setEditMode(true)} className="btn btn-primary">Edit Task</button>
           )}
-          {(task.created_by === (user?.username || user?.email) || user?.is_admin) && (
+          {isAdmin && (
             <button onClick={handleDelete} className="btn btn-danger">Delete</button>
           )}
         </div>
@@ -148,25 +135,29 @@ const TaskDetail = () => {
             <div className="glass-card">
               <h2 className="text-xl font-bold mb-4">Edit Task</h2>
               <form onSubmit={handleUpdate}>
-                <div className="form-group">
-                  <label className="form-label">Title</label>
-                  <input
-                    type="text"
-                    value={formData.title || ''}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="form-input"
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Description</label>
-                  <textarea
-                    value={formData.description || ''}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="form-input"
-                    rows="5"
-                  />
-                </div>
+                {isAdmin && (
+                  <>
+                    <div className="form-group">
+                      <label className="form-label">Title</label>
+                      <input
+                        type="text"
+                        value={formData.title || ''}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        className="form-input"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Description</label>
+                      <textarea
+                        value={formData.description || ''}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        className="form-input"
+                        rows="5"
+                      />
+                    </div>
+                  </>
+                )}
                 
                 <div className="grid-cards mb-4" style={{gridTemplateColumns: '1fr 1fr', gap: '1rem'}}>
                   <div className="form-group mb-0">
@@ -181,7 +172,14 @@ const TaskDetail = () => {
                     </select>
                   </div>
                   
-                  {user?.is_admin && (
+                  <div className="form-group mb-0">
+                    <label className="form-label">Light</label>
+                    <div className="form-input flex items-center">
+                      <span className={`status-light ${formData.status === 'completed' ? 'completed' : 'pending'}`} title={formData.status} aria-label={formData.status}></span>
+                    </div>
+                  </div>
+
+                  {isAdmin && formData.priority === '__never__' && (
                     <div className="form-group mb-0">
                       <label className="form-label">Priority (Admin)</label>
                       <select
@@ -197,7 +195,7 @@ const TaskDetail = () => {
                   )}
                 </div>
 
-                <div className="grid-cards mb-4" style={{gridTemplateColumns: '1fr 1fr', gap: '1rem'}}>
+                {isAdmin && <div className="grid-cards mb-4" style={{gridTemplateColumns: '1fr 1fr', gap: '1rem'}}>
                   <div className="form-group mb-0">
                     <label className="form-label">Due Date</label>
                     <input
@@ -221,9 +219,9 @@ const TaskDetail = () => {
                       ))}
                     </select>
                   </div>
-                </div>
+                </div>}
 
-                {user?.is_admin && (
+                {isAdmin && (
                   <div className="form-group mb-6 flex items-center gap-3 p-4 rounded-lg mt-4" style={{background: 'var(--bg-secondary)', border: '1px solid var(--border-color)'}}>
                     <input
                       type="checkbox"
@@ -280,8 +278,8 @@ const TaskDetail = () => {
                       <div className="text-xs text-muted">{new Date(comment.created_at).toLocaleString()}</div>
                     </div>
                     <p className="text-muted mb-3">{comment.content}</p>
-                    {(comment.user === (user?.username || user?.email) || user?.is_admin) && (
-                      <button onClick={() => handleDeleteComment(comment.id)} className="text-red-600 text-xs font-bold hover:underline">
+                    {(comment.user === (user?.username || user?.email) || isAdmin) && (
+                      <button onClick={() => handleDeleteComment(comment.id)} className="btn btn-danger btn-sm">
                         Delete Comment
                       </button>
                     )}
@@ -300,16 +298,7 @@ const TaskDetail = () => {
             <div className="space-y-4">
               <div>
                 <div className="text-xs text-muted font-bold uppercase mb-1">Status</div>
-                <span className={`text-sm font-bold px-3 py-1 rounded-full ${getStatusColor(task.status)}`}>
-                  {task.status.toUpperCase()}
-                </span>
-              </div>
-              
-              <div>
-                <div className="text-xs text-muted font-bold uppercase mb-1">Priority</div>
-                <span className="text-sm font-bold px-3 py-1 rounded-full" style={{background: priorityInfo.bg, color: priorityInfo.color}}>
-                  {priorityInfo.text}
-                </span>
+                <span className={`status-light ${statusClass}`} title={task.status} aria-label={task.status}></span>
               </div>
               
               <div>
@@ -342,7 +331,7 @@ const TaskDetail = () => {
                 onChange={(e) => setSelectedFile(e.target.files[0])} 
                 className="form-input text-sm p-1" 
               />
-              <button onClick={handleFileUpload} className="btn btn-secondary text-sm px-3">Upload</button>
+              <button onClick={handleFileUpload} className="btn btn-secondary btn-sm">Upload</button>
             </div>
             
             {task.attachments?.length === 0 ? (
@@ -356,7 +345,7 @@ const TaskDetail = () => {
                     </a>
                     <div className="flex justify-between items-center text-xs">
                       <span className="text-muted">By {attachment.uploaded_by}</span>
-                      <button onClick={() => handleDeleteAttachment(attachment.id)} className="text-red-600 hover:underline">Remove</button>
+                      <button onClick={() => handleDeleteAttachment(attachment.id)} className="btn btn-danger btn-sm">Remove</button>
                     </div>
                   </li>
                 ))}

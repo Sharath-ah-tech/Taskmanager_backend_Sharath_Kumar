@@ -75,16 +75,23 @@ class TaskCreateUpdateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         user = self.context['request'].user
-        if not user.is_admin:
+        if not user.is_superuser:
             # Non-admins cannot modify priority or is_enabled
             if 'priority' in attrs:
                 attrs.pop('priority')
             if 'is_enabled' in attrs:
                 attrs.pop('is_enabled')
+            if self.instance is not None:
+                allowed_fields = {'status'}
+                for field in list(attrs.keys()):
+                    if field not in allowed_fields:
+                        attrs.pop(field)
         return super().validate(attrs)
 
     def validate_group(self, group):
         from groups.models import GroupMembership
+        if self.context['request'].user.is_superuser:
+            return group
         if not GroupMembership.objects.filter(
             user=self.context['request'].user, group=group
         ).exists():

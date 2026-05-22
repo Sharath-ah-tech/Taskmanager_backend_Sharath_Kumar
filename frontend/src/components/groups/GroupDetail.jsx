@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { getGroupDetail, getGroupMembers, addMember, removeMember, deleteGroup } from '../../services/groups';
+import { useState, useEffect, useCallback } from 'react';
+import { getGroupDetail, getGroupMembers, addMember, updateMemberRole, removeMember, deleteGroup } from '../../services/groups';
 import { useAuth } from '../../contexts/AuthContext';
 
 const GroupDetail = () => {
@@ -16,11 +16,7 @@ const GroupDetail = () => {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' }); // { type: 'error' | 'success', text: '' }
 
-  useEffect(() => {
-    fetchGroupAndMembers();
-  }, [id]);
-
-  const fetchGroupAndMembers = async () => {
+  const fetchGroupAndMembers = useCallback(async () => {
     try {
       const [groupRes, membersRes] = await Promise.all([
         getGroupDetail(id),
@@ -29,11 +25,16 @@ const GroupDetail = () => {
       setGroup(groupRes.data);
       setMembers(membersRes.data);
     } catch (err) {
-      console.error("Failed to fetch group details");
+      console.error("Failed to fetch group details:", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchGroupAndMembers();
+  }, [fetchGroupAndMembers]);
 
   const handleAddMember = async (e) => {
     e.preventDefault();
@@ -66,6 +67,15 @@ const GroupDetail = () => {
     }
   };
 
+  const handleRoleChange = async (userId, role) => {
+    try {
+      await updateMemberRole(id, userId, role);
+      fetchGroupAndMembers();
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update member role.');
+    }
+  };
+
   const handleDeleteGroup = async () => {
     if (window.confirm('Are you absolutely sure you want to delete this entire group? This action cannot be undone.')) {
       try {
@@ -81,10 +91,11 @@ const GroupDetail = () => {
   if (!group) return <div className="text-center mt-8 text-red-600 font-bold">Group not found or you don't have access.</div>;
 
   // Check current user's role in the group
-  const currentUserId = user?.id || (user?.email ? members.find(m => m.user?.email === user.email)?.user?.id : null);
-  const currentUserMembership = members.find(m => m.user?.id === currentUserId || m.user?.email === user?.email);
-  const isOwnerOrAdmin = currentUserMembership?.role === 'owner' || currentUserMembership?.role === 'admin' || user?.is_admin;
-  const isOwner = currentUserMembership?.role === 'owner' || user?.is_admin;
+  const currentUserId = user?.id || (user?.email ? members.find(m => m.email === user.email)?.user : null);
+  const currentUserMembership = members.find(m => m.user === currentUserId || m.email === user?.email);
+  const isPlatformAdmin = Boolean(user?.is_superuser);
+  const isOwnerOrAdmin = currentUserMembership?.role === 'owner' || currentUserMembership?.role === 'admin' || isPlatformAdmin;
+  const isOwner = currentUserMembership?.role === 'owner' || isPlatformAdmin;
 
   return (
     <div className="animate-fade-in" style={{maxWidth: '900px', margin: '0 auto'}}>
@@ -106,7 +117,7 @@ const GroupDetail = () => {
         </div>
         <div className="flex gap-2">
           {isOwnerOrAdmin && (
-            <Link to={`/groups/${id}/edit`} className="btn btn-outline">Edit Group</Link>
+                    <Link to={`/groups/${id}/edit`} className="btn btn-outline">Edit Group</Link>
           )}
           {isOwner && (
             <button onClick={handleDeleteGroup} className="btn btn-danger">Delete Group</button>
@@ -128,7 +139,7 @@ const GroupDetail = () => {
           
           <div className="space-y-3">
             {members.map(m => {
-              const memberEmail = m.user?.email || m.email;
+              const memberEmail = m.email;
               const isCurrentUser = memberEmail === user?.email;
               
               return (
@@ -147,11 +158,22 @@ const GroupDetail = () => {
                   </div>
                   
                   <div className="flex gap-2">
+                    {isOwnerOrAdmin && m.role !== 'owner' && (
+                      <select
+                        value={m.role}
+                        onChange={(e) => handleRoleChange(m.user, e.target.value)}
+                        className="form-input"
+                        style={{padding: '0.4rem 0.65rem', fontSize: '0.8125rem'}}
+                      >
+                        <option value="member">Member</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    )}
                     {/* Admins/owners can remove others (but not the owner). Users can remove themselves. */}
                     {((isOwnerOrAdmin && m.role !== 'owner') || isCurrentUser) && (
                       <button 
-                        onClick={() => handleRemove(m.user?.id || m.id)} 
-                        className="text-red-500 hover:text-red-700 text-sm font-semibold hover:underline"
+                        onClick={() => handleRemove(m.user)} 
+                        className="btn btn-danger btn-sm"
                       >
                         {isCurrentUser ? 'Leave Group' : 'Remove'}
                       </button>

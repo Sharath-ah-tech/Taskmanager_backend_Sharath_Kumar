@@ -1,13 +1,11 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import NotificationBell from '../notifications/NotificationBell';
-import { useState } from 'react';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = async () => {
     await logout();
@@ -33,7 +31,7 @@ const Navbar = () => {
           <Link to="/tasks" className={`nav-link ${isActive('/tasks')}`}>Tasks</Link>
           <Link to="/calendar" className={`nav-link ${isActive('/calendar')}`}>Calendar</Link>
           <Link to="/groups" className={`nav-link ${isActive('/groups')}`}>Groups</Link>
-          {user?.is_admin && (
+          {user?.is_superuser && (
             <Link to="/admin" className={`nav-link ${isActive('/admin')}`} style={{color: 'var(--danger)'}}>
               Admin Dashboard
             </Link>
@@ -47,6 +45,9 @@ const Navbar = () => {
             <div className="text-sm font-medium hide-mobile" style={{color: 'var(--text-secondary)'}}>
               {user.username || user.email}
             </div>
+            {user?.is_superuser && (
+              <span className="admin-indicator hide-mobile">Admin</span>
+            )}
             <button onClick={handleLogout} className="btn btn-outline" style={{padding: '0.4rem 1rem', fontSize: '0.875rem'}}>
               Logout
             </button>

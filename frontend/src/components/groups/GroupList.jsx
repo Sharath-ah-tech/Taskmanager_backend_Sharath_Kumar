@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getGroups, deleteGroup } from '../../services/groups';
 
@@ -6,14 +6,21 @@ const GroupList = () => {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => { fetchGroups(); }, []);
-
-  const fetchGroups = async () => {
+  const fetchGroups = useCallback(async () => {
     try {
       const res = await getGroups();
       setGroups(res.data);
-    } catch (error) {} finally { setLoading(false); }
-  };
+    } catch (error) {
+      console.error('Failed to fetch groups:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchGroups();
+  }, [fetchGroups]);
 
   const handleDelete = async (id) => {
     if (window.confirm('Delete group?')) {

@@ -1,10 +1,14 @@
-import React, { createContext, useContext, useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import tokenManager from '../utils/tokenManager';
 import { useAuth } from './AuthContext';
 
 const SessionContext = createContext();
 
+// Inactivity timeout (7 days)
+const INACTIVITY_LIMIT = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// eslint-disable-next-line react-refresh/only-export-components
 export const useSession = () => useContext(SessionContext);
 
 export const SessionProvider = ({ children }) => {
@@ -13,11 +17,16 @@ export const SessionProvider = ({ children }) => {
   const inactivityTimerRef = useRef(null);
   const tokenCheckIntervalRef = useRef(null);
   
-  // Inactivity timeout (7 days)
-  const INACTIVITY_LIMIT = 7 * 24 * 60 * 60 * 1000; // 7 days
-  
+  // Handle logout due to inactivity
+  const handleInactivityLogout = useCallback(async () => {
+    await logout();
+    navigate('/login', { 
+      state: { message: 'Logged out due to inactivity (7 days)' }
+    });
+  }, [logout, navigate]);
+
   // Reset inactivity timer
-  const resetInactivityTimer = () => {
+  const resetInactivityTimer = useCallback(() => {
     tokenManager.updateLastActivity();
     
     if (inactivityTimerRef.current) {
@@ -31,18 +40,10 @@ export const SessionProvider = ({ children }) => {
         handleInactivityLogout();
       }
     }, INACTIVITY_LIMIT);
-  };
-  
-  // Handle logout due to inactivity
-  const handleInactivityLogout = async () => {
-    await logout();
-    navigate('/login', { 
-      state: { message: 'Logged out due to inactivity (7 days)' }
-    });
-  };
+  }, [handleInactivityLogout]);
   
   // Check token expiry periodically
-  const checkTokenExpiry = () => {
+  const checkTokenExpiry = useCallback(() => {
     const timeUntilExpiry = tokenManager.getTimeUntilExpiry();
     
     // If token expires in less than 5 minutes, refresh it
@@ -54,7 +55,7 @@ export const SessionProvider = ({ children }) => {
     if (!tokenManager.isAuthenticated()) {
       handleInactivityLogout();
     }
-  };
+  }, [handleInactivityLogout]);
   
   useEffect(() => {
     // Set up event listeners for user activity
@@ -85,7 +86,7 @@ export const SessionProvider = ({ children }) => {
         clearInterval(tokenCheckIntervalRef.current);
       }
     };
-  }, []);
+  }, [resetInactivityTimer, checkTokenExpiry]);
   
   return (
     <SessionContext.Provider value={{ resetInactivityTimer }}>

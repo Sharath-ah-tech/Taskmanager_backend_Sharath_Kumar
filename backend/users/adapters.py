@@ -1,13 +1,34 @@
 from allauth.account.adapter import DefaultAccountAdapter
+from allauth.core.exceptions import ImmediateHttpResponse
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
+from django.conf import settings
+from django.shortcuts import redirect
 
 
 class AccountAdapter(DefaultAccountAdapter):
     def is_open_for_signup(self, request):
         return True
 
+    def get_login_redirect_url(self, request):
+        return f"{settings.FRONTEND_URL}/oauth-callback"
+
+    def get_signup_redirect_url(self, request):
+        return f"{settings.FRONTEND_URL}/oauth-callback"
+
 
 class SocialAccountAdapter(DefaultSocialAccountAdapter):
+    def on_authentication_error(
+        self,
+        request,
+        provider,
+        error=None,
+        exception=None,
+        extra_context=None,
+    ):
+        raise ImmediateHttpResponse(
+            redirect(f"{settings.FRONTEND_URL}/oauth-callback?error=oauth_failed")
+        )
+
     def pre_social_login(self, request, sociallogin):
         """Link OAuth login to an existing account with the same email."""
         user = sociallogin.user

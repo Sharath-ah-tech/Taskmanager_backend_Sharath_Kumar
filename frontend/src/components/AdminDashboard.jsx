@@ -1,133 +1,199 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
-import { Link } from 'react-router-dom';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
-  
-  const [stats, setStats] = useState({ users: 0, groups: 0, tasks: 0 });
   const [lists, setLists] = useState({ users: [], groups: [], tasks: [] });
-  const [activeTab, setActiveTab] = useState(null); // 'users', 'groups', 'tasks'
+  const [activeTab, setActiveTab] = useState('tasks');
   const [loading, setLoading] = useState(true);
+  const [savingTaskId, setSavingTaskId] = useState(null);
+  const [savingUserId, setSavingUserId] = useState(null);
+  const [message, setMessage] = useState('');
+
+  const fetchAdminData = useCallback(async () => {
+    try {
+      const [usersRes, groupsRes, tasksRes] = await Promise.all([
+        api.get('/auth/admin/users/'),
+        api.get('/groups/'),
+        api.get('/tasks/')
+      ]);
+
+      setLists({
+        users: usersRes.data || [],
+        groups: groupsRes.data.results || groupsRes.data || [],
+        tasks: tasksRes.data.results || tasksRes.data || []
+      });
+    } catch (err) {
+      console.error('Failed to load admin data', err);
+      setMessage('Failed to load admin data.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchAdminStats = async () => {
-      try {
-        const [usersRes, groupsRes, tasksRes] = await Promise.all([
-          api.get('/auth/admin/users/'), // The new endpoint we created
-          api.get('/groups/'),
-          api.get('/tasks/')
-        ]);
-        
-        const usersData = usersRes.data || [];
-        const groupsData = groupsRes.data.results || groupsRes.data || [];
-        const tasksData = tasksRes.data.results || tasksRes.data || [];
-        
-        setLists({
-          users: usersData,
-          groups: groupsData,
-          tasks: tasksData
-        });
-        
-        setStats({
-          users: usersData.length,
-          groups: groupsData.length,
-          tasks: tasksData.length
-        });
-      } catch (err) {
-        console.error("Failed to load admin stats", err);
-      } finally {
-        setLoading(false);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchAdminData();
+  }, [fetchAdminData]);
+
+  const updateTask = async (task, changes) => {
+    setSavingTaskId(task.id);
+    setMessage('');
+    try {
+      const payload = { ...changes };
+
+      if (Object.prototype.hasOwnProperty.call(payload, 'due_date') && !payload.due_date) {
+        payload.due_date = null;
       }
-    };
-    
-    fetchAdminStats();
-  }, []);
+      const response = await api.patch(`/tasks/${task.id}/`, payload);
+      setLists(prev => ({
+        ...prev,
+        tasks: prev.tasks.map(item => item.id === task.id ? { ...item, ...response.data } : item)
+      }));
+    } catch (err) {
+      console.error('Failed to update task', err);
+      setMessage(err.response?.data?.error || 'Failed to update task.');
+    } finally {
+      setSavingTaskId(null);
+    }
+  };
+
+  const updateUser = async (member, changes) => {
+    setSavingUserId(member.id);
+    setMessage('');
+    try {
+      const response = await api.patch(`/auth/admin/users/${member.id}/`, changes);
+      setLists(prev => ({
+        ...prev,
+        users: prev.users.map(item => item.id === member.id ? { ...item, ...response.data } : item)
+      }));
+    } catch (err) {
+      console.error('Failed to update member', err);
+      setMessage(err.response?.data?.error || 'Failed to update member.');
+    } finally {
+      setSavingUserId(null);
+    }
+  };
 
   if (loading) return <div className="text-center mt-8"><div className="loader mx-auto"></div></div>;
 
+  const stats = {
+    users: lists.users.length,
+    groups: lists.groups.length,
+    tasks: lists.tasks.length
+  };
+
   return (
-    <div className="animate-fade-in" style={{maxWidth: '1200px', margin: '0 auto'}}>
-      <div className="mb-8 flex items-center gap-4">
-        <div className="p-3 rounded-xl" style={{background: 'linear-gradient(135deg, var(--danger), #dc2626)', color: 'white'}}>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
-            <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
-          </svg>
-        </div>
+    <div className="animate-fade-in" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div className="admin-subnav">
         <div>
-          <h1 className="text-4xl font-bold mb-1">Admin Dashboard</h1>
-          <p className="text-muted">Platform Overview & Management</p>
+          <div className="text-sm text-muted font-bold">Admin Dashboard</div>
+          <div className="font-semibold">{user?.email}</div>
+        </div>
+        <div className="admin-tabs">
+          <button className={`admin-tab ${activeTab === 'tasks' ? 'active' : ''}`} onClick={() => setActiveTab('tasks')}>Tasks</button>
+          <button className={`admin-tab ${activeTab === 'groups' ? 'active' : ''}`} onClick={() => setActiveTab('groups')}>Teams</button>
+          <button className={`admin-tab ${activeTab === 'users' ? 'active' : ''}`} onClick={() => setActiveTab('users')}>Members</button>
         </div>
       </div>
 
-      <div className="grid-cards mb-8" style={{gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))'}}>
-        <div 
-          onClick={() => setActiveTab(activeTab === 'users' ? null : 'users')}
-          className="glass-card cursor-pointer transition-all hover:scale-105" 
-          style={{borderTop: '4px solid var(--accent-primary)', outline: activeTab === 'users' ? '2px solid var(--accent-primary)' : 'none'}}
-        >
-          <h3 className="text-muted font-semibold mb-2 flex items-center justify-between">
-            Total Users
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          </h3>
-          <p className="text-4xl font-bold">{stats.users}</p>
-          <p className="text-xs text-blue-500 mt-2 font-semibold">Click to view details &rarr;</p>
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-1">
+          <h1 className="text-4xl font-bold mb-0">Admin Dashboard</h1>
+          <span className="admin-indicator">Admin Area</span>
         </div>
-        
-        <div 
-          onClick={() => setActiveTab(activeTab === 'groups' ? null : 'groups')}
-          className="glass-card cursor-pointer transition-all hover:scale-105" 
-          style={{borderTop: '4px solid var(--success)', outline: activeTab === 'groups' ? '2px solid var(--success)' : 'none'}}
-        >
-          <h3 className="text-muted font-semibold mb-2 flex items-center justify-between">
-            Total Groups
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-          </h3>
-          <p className="text-4xl font-bold">{stats.groups}</p>
-          <p className="text-xs text-green-500 mt-2 font-semibold">Click to view details &rarr;</p>
-        </div>
-        
-        <div 
-          onClick={() => setActiveTab(activeTab === 'tasks' ? null : 'tasks')}
-          className="glass-card cursor-pointer transition-all hover:scale-105" 
-          style={{borderTop: '4px solid var(--warning)', outline: activeTab === 'tasks' ? '2px solid var(--warning)' : 'none'}}
-        >
-          <h3 className="text-muted font-semibold mb-2 flex items-center justify-between">
-            Total Tasks
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-          </h3>
-          <p className="text-4xl font-bold">{stats.tasks}</p>
-          <p className="text-xs text-yellow-500 mt-2 font-semibold">Click to view details &rarr;</p>
-        </div>
+        <p className="text-muted">Manage tasks, teams, and registered members.</p>
       </div>
-      
-      {/* Dynamic List Rendering */}
-      {activeTab === 'users' && (
-        <div className="glass-card animate-fade-in mb-8">
-          <h2 className="text-2xl font-bold mb-4">All Users</h2>
+
+      {message && <div className="alert alert-error">{message}</div>}
+
+      <div className="grid-cards mb-8" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+        <button className="glass-card text-left" onClick={() => setActiveTab('tasks')} style={{ borderTop: '4px solid var(--warning)' }}>
+          <h3 className="text-muted font-semibold mb-2">Tasks</h3>
+          <p className="text-4xl font-bold">{stats.tasks}</p>
+        </button>
+        <button className="glass-card text-left" onClick={() => setActiveTab('groups')} style={{ borderTop: '4px solid var(--success)' }}>
+          <h3 className="text-muted font-semibold mb-2">Teams</h3>
+          <p className="text-4xl font-bold">{stats.groups}</p>
+        </button>
+        <button className="glass-card text-left" onClick={() => setActiveTab('users')} style={{ borderTop: '4px solid var(--accent-primary)' }}>
+          <h3 className="text-muted font-semibold mb-2">Members</h3>
+          <p className="text-4xl font-bold">{stats.users}</p>
+        </button>
+      </div>
+
+      {activeTab === 'tasks' && (
+        <div className="glass-card">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold mb-0">Task Controls</h2>
+            <Link to="/tasks/new" className="btn btn-primary btn-sm">New Task</Link>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b" style={{borderColor: 'var(--border-color)'}}>
-                  <th className="p-3 text-sm font-semibold text-muted">ID</th>
-                  <th className="p-3 text-sm font-semibold text-muted">Email / Username</th>
-                  <th className="p-3 text-sm font-semibold text-muted">Role</th>
-                  <th className="p-3 text-sm font-semibold text-muted">Date Joined</th>
+                <tr className="border-b" style={{ borderColor: 'var(--border-color)' }}>
+                  <th className="p-3 text-sm font-semibold text-muted">Light</th>
+                  <th className="p-3 text-sm font-semibold text-muted">Task</th>
+                  <th className="p-3 text-sm font-semibold text-muted">Status</th>
+                  <th className="p-3 text-sm font-semibold text-muted">Due Date</th>
+                  <th className="p-3 text-sm font-semibold text-muted">Enabled</th>
+                  <th className="p-3 text-sm font-semibold text-muted">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {lists.users.map(u => (
-                  <tr key={u.id} className="border-b last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800" style={{borderColor: 'var(--border-color)'}}>
-                    <td className="p-3 text-sm">{u.id}</td>
-                    <td className="p-3 text-sm font-medium">{u.email || u.username} {u.id === user?.id && <span className="bg-blue-100 text-blue-800 text-xs px-1.5 rounded ml-2">You</span>}</td>
-                    <td className="p-3 text-sm">
-                      {u.is_admin ? <span className="text-red-500 font-bold text-xs uppercase tracking-wider">Admin</span> : <span className="text-gray-500 text-xs uppercase tracking-wider">User</span>}
-                    </td>
-                    <td className="p-3 text-sm text-muted">{new Date(u.date_joined).toLocaleDateString()}</td>
-                  </tr>
-                ))}
+                {lists.tasks.map(task => {
+                  const statusClass = task.status === 'completed' ? 'completed' : 'pending';
+                  const dateValue = task.due_date ? task.due_date.substring(0, 16) : '';
+                  return (
+                    <tr key={task.id} className="border-b last:border-0" style={{ borderColor: 'var(--border-color)', opacity: task.is_enabled === false ? 0.55 : 1 }}>
+                      <td className="p-3"><span className={`status-light ${statusClass}`} title={task.status} aria-label={task.status}></span></td>
+                      <td className="p-3">
+                        <div className="font-semibold">{task.title}</div>
+                        <div className="text-xs text-muted">Group #{task.group?.id || task.group}</div>
+                      </td>
+                      <td className="p-3">
+                        <select
+                          className="form-input"
+                          value={task.status}
+                          onChange={e => updateTask(task, { status: e.target.value })}
+                          disabled={savingTaskId === task.id}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="completed">Completed</option>
+                        </select>
+                      </td>
+                      <td className="p-3">
+                        <input
+                          type="datetime-local"
+                          className="form-input"
+                          value={dateValue}
+                          onChange={e => updateTask(task, { due_date: e.target.value })}
+                          disabled={savingTaskId === task.id}
+                        />
+                      </td>
+                      <td className="p-3">
+                        <label className="flex items-center gap-2 font-semibold">
+                          <input
+                            type="checkbox"
+                            checked={task.is_enabled !== false}
+                            onChange={e => updateTask(task, { is_enabled: e.target.checked })}
+                            disabled={savingTaskId === task.id}
+                            style={{ width: '18px', height: '18px', accentColor: 'var(--accent-primary)' }}
+                          />
+                          {task.is_enabled === false ? 'Disabled' : 'Enabled'}
+                        </label>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex gap-2">
+                          <Link to={`/tasks/${task.id}`} className="btn btn-outline btn-sm">Open</Link>
+                          <Link to={`/tasks/${task.id}/edit`} className="btn btn-secondary btn-sm">Edit</Link>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -135,24 +201,33 @@ const AdminDashboard = () => {
       )}
 
       {activeTab === 'groups' && (
-        <div className="glass-card animate-fade-in mb-8">
-          <h2 className="text-2xl font-bold mb-4">All Groups</h2>
+        <div className="glass-card">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold mb-0">Teams</h2>
+            <Link to="/groups/new" className="btn btn-primary btn-sm">New Team</Link>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b" style={{borderColor: 'var(--border-color)'}}>
-                  <th className="p-3 text-sm font-semibold text-muted">Name</th>
-                  <th className="p-3 text-sm font-semibold text-muted">Description</th>
-                  <th className="p-3 text-sm font-semibold text-muted">Action</th>
+                <tr className="border-b" style={{ borderColor: 'var(--border-color)' }}>
+                  <th className="p-3 text-sm font-semibold text-muted">Team</th>
+                  <th className="p-3 text-sm font-semibold text-muted">Members</th>
+                  <th className="p-3 text-sm font-semibold text-muted">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {lists.groups.map(g => (
-                  <tr key={g.id} className="border-b last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800" style={{borderColor: 'var(--border-color)'}}>
-                    <td className="p-3 text-sm font-medium">{g.name}</td>
-                    <td className="p-3 text-sm text-muted max-w-xs truncate">{g.description || 'No description'}</td>
-                    <td className="p-3 text-sm">
-                      <Link to={`/groups/${g.id}`} className="text-blue-500 hover:underline">View Group</Link>
+                {lists.groups.map(group => (
+                  <tr key={group.id} className="border-b last:border-0" style={{ borderColor: 'var(--border-color)' }}>
+                    <td className="p-3">
+                      <div className="font-semibold">{group.name}</div>
+                      <div className="text-xs text-muted">{group.description || 'No description'}</div>
+                    </td>
+                    <td className="p-3">{group.member_count || group.members?.length || 0}</td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        <Link to={`/groups/${group.id}`} className="btn btn-outline btn-sm">Manage Members</Link>
+                        <Link to={`/groups/${group.id}/edit`} className="btn btn-secondary btn-sm">Edit Team</Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -162,51 +237,71 @@ const AdminDashboard = () => {
         </div>
       )}
 
-      {activeTab === 'tasks' && (
-        <div className="glass-card animate-fade-in mb-8">
-          <h2 className="text-2xl font-bold mb-4">All Tasks</h2>
+      {activeTab === 'users' && (
+        <div className="glass-card">
+          <h2 className="text-2xl font-bold mb-4">Member Controls</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b" style={{borderColor: 'var(--border-color)'}}>
-                  <th className="p-3 text-sm font-semibold text-muted">Title</th>
-                  <th className="p-3 text-sm font-semibold text-muted">Priority</th>
-                  <th className="p-3 text-sm font-semibold text-muted">Status</th>
-                  <th className="p-3 text-sm font-semibold text-muted">Action</th>
+                <tr className="border-b" style={{ borderColor: 'var(--border-color)' }}>
+                  <th className="p-3 text-sm font-semibold text-muted">Email</th>
+                  <th className="p-3 text-sm font-semibold text-muted">Username</th>
+                  <th className="p-3 text-sm font-semibold text-muted">Role</th>
+                  <th className="p-3 text-sm font-semibold text-muted">Account</th>
+                  <th className="p-3 text-sm font-semibold text-muted">Tasks</th>
+                  <th className="p-3 text-sm font-semibold text-muted">Joined</th>
                 </tr>
               </thead>
               <tbody>
-                {lists.tasks.map(t => {
-                  let priorityColor = 'text-green-500';
-                  if (t.priority === 'red_light') priorityColor = 'text-red-500';
-                  if (t.priority === 'yellow_light') priorityColor = 'text-yellow-500';
-
-                  return (
-                    <tr key={t.id} className={`border-b last:border-0 hover:bg-gray-50 dark:hover:bg-gray-800 ${t.is_enabled === false ? 'opacity-50 grayscale' : ''}`} style={{borderColor: 'var(--border-color)'}}>
-                      <td className="p-3 text-sm font-medium">{t.title} {t.is_enabled === false && <span className="ml-2 text-xs bg-gray-200 text-gray-700 px-1 rounded">DISABLED</span>}</td>
-                      <td className={`p-3 text-xs font-bold uppercase ${priorityColor}`}>
-                        {t.priority.replace('_', ' ')}
-                      </td>
-                      <td className="p-3 text-sm text-muted capitalize">{t.status.replace('_', ' ')}</td>
-                      <td className="p-3 text-sm">
-                        <Link to={`/tasks/${t.id}`} className="text-blue-500 hover:underline">View Task</Link>
-                      </td>
-                    </tr>
-                  )
-                })}
+                {lists.users.map(item => (
+                  <tr key={item.id} className="border-b last:border-0" style={{ borderColor: 'var(--border-color)' }}>
+                    <td className="p-3 font-medium">{item.email}</td>
+                    <td className="p-3">
+                      <input
+                        className="form-input"
+                        defaultValue={item.username || ''}
+                        onBlur={e => {
+                          const username = e.target.value.trim();
+                          if (username !== (item.username || '')) updateUser(item, { username });
+                        }}
+                        disabled={savingUserId === item.id}
+                        style={{ minWidth: '150px' }}
+                      />
+                    </td>
+                    <td className="p-3">
+                      <span className={`badge ${item.is_superuser ? 'badge-warning' : 'badge-primary'}`}>
+                        {item.is_superuser ? 'Superuser' : 'User'}
+                      </span>
+                    </td>
+                    <td className="p-3">
+                      <label className="flex items-center gap-2 font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={item.is_active !== false}
+                          onChange={e => updateUser(item, { is_active: e.target.checked })}
+                          disabled={savingUserId === item.id}
+                          style={{ width: '18px', height: '18px', accentColor: 'var(--accent-primary)' }}
+                        />
+                        {item.is_active === false ? 'Disabled' : 'Enabled'}
+                      </label>
+                    </td>
+                    <td className="p-3">
+                      <label className="flex items-center gap-2 font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={item.can_add_task !== false}
+                          onChange={e => updateUser(item, { can_add_task: e.target.checked })}
+                          disabled={savingUserId === item.id}
+                          style={{ width: '18px', height: '18px', accentColor: 'var(--accent-primary)' }}
+                        />
+                        Can create
+                      </label>
+                    </td>
+                    <td className="p-3 text-muted">{new Date(item.date_joined).toLocaleDateString()}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
-          </div>
-        </div>
-      )}
-      
-      {!activeTab && (
-        <div className="glass-card">
-          <h2 className="text-2xl font-bold mb-4">Platform Settings</h2>
-          <p className="text-muted mb-6">Click on any of the metric cards above to view detailed lists of platform data.</p>
-          
-          <div className="alert alert-info">
-            <strong>Note:</strong> You are seeing this page because your account has <code>is_admin</code> privileges.
           </div>
         </div>
       )}

@@ -5,7 +5,7 @@ from .views import (
     LogoutView, MeView, ChangePasswordView,
     PasswordResetRequestView, PasswordResetConfirmView,
     EmailVerificationRequestView, EmailVerifyView,
-    AuthRootView, AdminUserListView
+    AuthRootView, AdminUserListView, AdminUserDetailView
 )
 
 urlpatterns = [
@@ -34,4 +34,5 @@ urlpatterns = [
     
     # Admin routes
     path('admin/users/', AdminUserListView.as_view(), name='admin-users'),
+    path('admin/users/<int:pk>/', AdminUserDetailView.as_view(), name='admin-user-detail'),
 ]

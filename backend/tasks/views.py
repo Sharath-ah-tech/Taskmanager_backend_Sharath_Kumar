@@ -16,12 +16,19 @@ from .serializers import (
 ALLOWED_ORDERINGS = {'created_at', '-created_at', 'due_date', '-due_date', 'priority', '-priority', 'status'}
 
 
+def is_platform_superuser(user):
+    return bool(user and user.is_authenticated and user.is_superuser)
+
+
 class TaskListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        user_groups = GroupMembership.objects.filter(user=request.user).values_list('group_id', flat=True)
-        qs = Task.objects.filter(group__in=user_groups).select_related('created_by', 'assigned_to', 'group')
+        if is_platform_superuser(request.user):
+            qs = Task.objects.all().select_related('created_by', 'assigned_to', 'group')
+        else:
+            user_groups = GroupMembership.objects.filter(user=request.user).values_list('group_id', flat=True)
+            qs = Task.objects.filter(group__in=user_groups).select_related('created_by', 'assigned_to', 'group')
 
         qs = TaskFilter(request.query_params, queryset=qs).qs
 
@@ -55,6 +62,8 @@ class TaskDetailView(APIView):
         return GroupMembership.objects.filter(user=user, group=task.group).exists()
 
     def _check_edit_permission(self, task, user):
+        if is_platform_superuser(user):
+            return True
         if task.created_by == user:
             return True
         return GroupMembership.objects.filter(
@@ -63,14 +72,25 @@ class TaskDetailView(APIView):
 
     def get(self, request, pk):
         task = get_object_or_404(Task, pk=pk)
-        if not self._check_membership(task, request.user):
+        if not (is_platform_superuser(request.user) or self._check_membership(task, request.user)):
             return Response({'error': 'Not a member of this group.'}, status=status.HTTP_403_FORBIDDEN)
         return Response(TaskSerializer(task).data)
 
     def patch(self, request, pk):
         task = get_object_or_404(Task, pk=pk)
-        if not self._check_edit_permission(task, request.user):
-            return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        if is_platform_superuser(request.user):
+            pass
+        elif not self._check_membership(task, request.user):
+            return Response({'error': 'Not a member of this group.'}, status=status.HTTP_403_FORBIDDEN)
+        else:
+            allowed_fields = {'status'}
+            invalid_fields = set(request.data.keys()) - allowed_fields
+            if invalid_fields:
+                return Response(
+                    {'error': 'Only task status can be changed by regular users.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         serializer = TaskCreateUpdateSerializer(
             task, data=request.data, partial=True, context={'request': request}
         )
@@ -81,8 +101,8 @@ class TaskDetailView(APIView):
 
     def delete(self, request, pk):
         task = get_object_or_404(Task, pk=pk)
-        if not self._check_edit_permission(task, request.user):
-            return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
+        if not is_platform_superuser(request.user):
+            return Response({'error': 'Only admins can delete tasks.'}, status=status.HTTP_403_FORBIDDEN)
         task.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
 

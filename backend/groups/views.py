@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import Group, GroupMembership
+from notifications.models import Notification
 from .serializers import (
     GroupSerializer, GroupCreateUpdateSerializer,
     InviteMemberSerializer, UpdateMemberRoleSerializer, MemberSerializer,
@@ -14,14 +15,21 @@ from .serializers import (
 User = get_user_model()
 
 
+def is_platform_superuser(user):
+    return bool(user and user.is_authenticated and user.is_superuser)
+
+
 class GroupListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """All groups the current user belongs to."""
-        groups = Group.objects.filter(
-            memberships__user=request.user
-        ).distinct().prefetch_related('memberships__user')
+        if is_platform_superuser(request.user):
+            groups = Group.objects.all().distinct().prefetch_related('memberships__user')
+        else:
+            groups = Group.objects.filter(
+                memberships__user=request.user
+            ).distinct().prefetch_related('memberships__user')
         return Response(GroupSerializer(groups, many=True).data)
 
     def post(self, request):
@@ -39,6 +47,8 @@ class GroupDetailView(APIView):
 
     def _get_group_for_member(self, pk, user):
         group = get_object_or_404(Group, pk=pk)
+        if is_platform_superuser(user):
+            return group
         if not GroupMembership.objects.filter(user=user, group=group).exists():
             return None
         return group
@@ -51,7 +61,7 @@ class GroupDetailView(APIView):
 
     def patch(self, request, pk):
         group = get_object_or_404(Group, pk=pk)
-        if not GroupMembership.objects.filter(
+        if not is_platform_superuser(request.user) and not GroupMembership.objects.filter(
             user=request.user, group=group, role__in=['owner', 'admin']
         ).exists():
             return Response({'error': 'Only admins/owners can edit the group.'}, status=status.HTTP_403_FORBIDDEN)
@@ -63,7 +73,7 @@ class GroupDetailView(APIView):
 
     def delete(self, request, pk):
         group = get_object_or_404(Group, pk=pk)
-        if not GroupMembership.objects.filter(
+        if not is_platform_superuser(request.user) and not GroupMembership.objects.filter(
             user=request.user, group=group, role='owner'
         ).exists():
             return Response({'error': 'Only the owner can delete this group.'}, status=status.HTTP_403_FORBIDDEN)
@@ -76,7 +86,7 @@ class GroupMembersView(APIView):
 
     def get(self, request, group_id):
         group = get_object_or_404(Group, pk=group_id)
-        if not GroupMembership.objects.filter(user=request.user, group=group).exists():
+        if not is_platform_superuser(request.user) and not GroupMembership.objects.filter(user=request.user, group=group).exists():
             return Response({'error': 'Not a member.'}, status=status.HTTP_403_FORBIDDEN)
         members = GroupMembership.objects.filter(group=group).select_related('user')
         return Response(MemberSerializer(members, many=True).data)
@@ -84,7 +94,7 @@ class GroupMembersView(APIView):
     def post(self, request, group_id):
         """Invite a user by email (admin/owner only)."""
         group = get_object_or_404(Group, pk=group_id)
-        if not GroupMembership.objects.filter(
+        if not is_platform_superuser(request.user) and not GroupMembership.objects.filter(
             user=request.user, group=group, role__in=['owner', 'admin']
         ).exists():
             return Response({'error': 'Only admins/owners can invite members.'}, status=status.HTTP_403_FORBIDDEN)
@@ -104,6 +114,11 @@ class GroupMembersView(APIView):
         )
         if not created:
             return Response({'error': 'User is already a member.'}, status=status.HTTP_400_BAD_REQUEST)
+        Notification.objects.create(
+            user=invitee,
+            type='member_invited',
+            message=f'You were added to group "{group.name}".',
+        )
         return Response(MemberSerializer(membership).data, status=status.HTTP_201_CREATED)
 
 
@@ -113,7 +128,7 @@ class GroupMemberDetailView(APIView):
     def patch(self, request, group_id, user_id):
         """Change a member's role. Admin/owner only."""
         group = get_object_or_404(Group, pk=group_id)
-        if not GroupMembership.objects.filter(
+        if not is_platform_superuser(request.user) and not GroupMembership.objects.filter(
             user=request.user, group=group, role__in=['owner', 'admin']
         ).exists():
             return Response({'error': 'Permission denied.'}, status=status.HTTP_403_FORBIDDEN)
@@ -135,7 +150,7 @@ class GroupMemberDetailView(APIView):
         membership = get_object_or_404(GroupMembership, group=group, user_id=user_id)
 
         is_self      = request.user.pk == int(user_id)
-        is_admin     = GroupMembership.objects.filter(
+        is_admin     = is_platform_superuser(request.user) or GroupMembership.objects.filter(
             user=request.user, group=group, role__in=['owner', 'admin']
         ).exists()
 
